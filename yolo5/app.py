@@ -1,20 +1,30 @@
 import logging
 import time
-from pathlib import Path
+from pathlib import Path, PosixPath
 
 from botocore.exceptions import ClientError
-from flask import Flask, request
+from flask import Flask, request, jsonify
 from detect import run
 import uuid
 import yaml
 from loguru import logger
-from dotenv import load_dotenv
+from dotenv import load_dotenv, find_dotenv
 import os
 import boto3
 from pymongo import MongoClient
+import json
+from bson import ObjectId
 
-env_path = os.path.join(os.path.dirname(__file__), '..', '.env')
-load_dotenv(dotenv_path=env_path)
+class JSONEncoder(json.JSONEncoder):
+    def default(self, o):
+        if isinstance(o, ObjectId):
+            return str(o)
+        elif isinstance(o, PosixPath):
+            return str(o)
+        return json.JSONEncoder.default(self, o)
+
+#env_path = os.path.join(os.path.dirname(__file__), '..', '.env')
+#load_dotenv(find_dotenv())#dotenv_path=env_path
 
 aws_key_id = os.getenv('AWS_KEY_ID')
 aws_access_key = os.getenv('AWS_ACCESS_KEY')
@@ -22,16 +32,16 @@ region = os.getenv('REGION')
 session = boto3.Session(aws_access_key_id=aws_key_id, aws_secret_access_key=aws_access_key, region_name=region)
 
 images_bucket = os.getenv('BUCKET_NAME')
-
 mongo_uri = os.getenv('MONGO_URI')
 mongo_client = MongoClient(mongo_uri)
-db = mongo_client['database_name']
-collection = db['collection_name']
+db = mongo_client['docker-yolo-db']
+collection = db['predicted-summaries']
 
 with open("data/coco128.yaml", "r") as stream:
     names = yaml.safe_load(stream)['names']
 
 app = Flask(__name__)
+app.json_encoder = JSONEncoder
 
 
 @app.route('/predict', methods=['POST'])
@@ -46,14 +56,17 @@ def predict():
 
     # TODO download img_name from S3, store the local image path in original_img_path
     #  The bucket name should be provided as an env var BUCKET_NAME.
-    s3 = session.resource('s3')
-    original_img_path = f"../Images/{img_name}"
+    s3 = session.client('s3')
+    #os.makedirs('../Images', exist_ok=True)
+    original_img_path = img_name
     try:
+        logger.info(img_name)
+        logger.info(images_bucket)
         s3.download_file(images_bucket, img_name, original_img_path)
         logger.info(f'prediction: {prediction_id}/{original_img_path}. Download img completed')
     except Exception as e:
         logger.error(f'Error downloading image from S3:{e}')
-        return 'Error downloading image'
+        return 'Error downloading image from S3'
     # Predicts the objects in the image
     run(
         weights='yolov5s.pt',
@@ -91,14 +104,23 @@ def predict():
         prediction_summary = {
             'prediction_id': prediction_id,
             'original_img_path': original_img_path,
-            'predicted_img_path': predicted_img_path,
+            'predicted_img_path': str(predicted_img_path),
             'labels': labels,
             'time': time.time()
         }
-
+        logger.info("summaarrrrrrrrrrrrrrrrrryyyy................")
+        logger.info(type(prediction_summary))
+        for key,value in prediction_summary.items():
+            logger.info(f"{key},{type(value)}")
+        # logger.info(prediction_summary)
         # TODO store the prediction_summary in MongoDB
-
-        return prediction_summary
+        save_to_db(prediction_summary)
+        logger.info("Round 2")
+        for key,value in prediction_summary.items():
+            logger.info(f"{key},{type(value)}")
+        prediction_summary['_id'] = str(prediction_summary['_id'])
+        logger.info(f"{type(prediction_summary)}")
+        return jsonify(prediction_summary)
     else:
         return f'prediction: {prediction_id}/{original_img_path}. prediction result not found', 404
 
@@ -107,7 +129,7 @@ def predict():
 def upload_file_to_s3(file_name, bucket, object_name=None):
     if object_name is None:
         object_name = file_name
-    s3_client = session.resource('s3')
+    s3_client = session.client('s3')
     try:
         s3_client.upload_file(file_name, bucket, object_name)
     except ClientError as e:
@@ -119,6 +141,7 @@ def upload_file_to_s3(file_name, bucket, object_name=None):
 # a function that saves a file to the db collection
 def save_to_db(data):
     try:
+        logger.info("Saving Data to Collection..")
         collection.insert_one(data)
         logger.info("Saved Data Successfully")
         return True

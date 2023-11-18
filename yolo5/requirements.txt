@@ -2,6 +2,7 @@ flask
 pyyaml
 loguru
 boto3
+python-dotenv
 pymongo
 
 # testing
