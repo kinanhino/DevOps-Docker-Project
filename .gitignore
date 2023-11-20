@@ -1,5 +1,6 @@
 venv
 venv/*
 .idea/*
-.idea
-yolo5/.env
+*.idea
+.env
+*__pycache__/*
