@@ -58,11 +58,15 @@ def predict():
     #  The bucket name should be provided as an env var BUCKET_NAME.
     s3 = session.client('s3')
     #os.makedirs('../Images', exist_ok=True)
+    logger.info(f"{img_name}: image name before change")
     original_img_path = img_name
+    if "photos" in img_name:
+        os.makedirs("photos", exist_ok=True)
+        img_name = img_name.split('/')[-1]
     try:
-        logger.info(img_name)
-        logger.info(images_bucket)
-        s3.download_file(images_bucket, img_name, original_img_path)
+        logger.info(f"Downloading {img_name} from {images_bucket} to {original_img_path}")
+
+        s3.download_file(images_bucket, original_img_path, original_img_path)
         logger.info(f'prediction: {prediction_id}/{original_img_path}. Download img completed')
     except Exception as e:
         logger.error(f'Error downloading image from S3:{e}')
@@ -81,12 +85,13 @@ def predict():
 
     # This is the path for the predicted image with labels
     # The predicted image typically includes bounding boxes drawn around the detected objects, along with class labels and possibly confidence scores.
-    predicted_img_path = Path(f'static/data/{prediction_id}/{original_img_path}')
+    predicted_img_path = Path(f'static/data/{prediction_id}/{img_name}')
 
     # TODO Uploads the predicted image (predicted_img_path) to S3 (be careful not to override the original image).
     upload_file_to_s3(str(predicted_img_path), images_bucket, f"predicted/{img_name}")
+    logger.info(f"here: {str(predicted_img_path)}")
     # Parse prediction labels and create a summary
-    pred_summary_path = Path(f'static/data/{prediction_id}/labels/{original_img_path.split(".")[0]}.txt')
+    pred_summary_path = Path(f'static/data/{prediction_id}/labels/{img_name.split(".")[0]}.txt')
     if pred_summary_path.exists():
         with open(pred_summary_path) as f:
             labels = f.read().splitlines()
@@ -115,11 +120,7 @@ def predict():
         # logger.info(prediction_summary)
         # TODO store the prediction_summary in MongoDB
         save_to_db(prediction_summary)
-        logger.info("Round 2")
-        for key,value in prediction_summary.items():
-            logger.info(f"{key},{type(value)}")
-        prediction_summary['_id'] = str(prediction_summary['_id'])
-        logger.info(f"{type(prediction_summary)}")
+        prediction_summary["_id"] = str(prediction_summary["_id"])
         return jsonify(prediction_summary)
     else:
         return f'prediction: {prediction_id}/{original_img_path}. prediction result not found', 404
