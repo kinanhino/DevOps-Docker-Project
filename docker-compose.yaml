@@ -1,0 +1,32 @@
+version: '3.8'
+
+services:
+  mongoDocker:
+    image: mongo:5
+    command: mongod --replSet myReplicaSet --bind_ip localhost,mongoDocker
+    volumes:
+      - mongoMainVol:/data/db
+    ports:
+      - "27017:27017"
+    networks:
+      - mongoCluster
+  yolo5bot:
+    image: kinanhino/yolobot:1.0.0
+    volumes:
+    ports:
+      - "8081:8081"
+    networks:
+      - mongoCluster
+  polybot:
+    image: kinanhino/polybot:1.0.0
+    ports:
+      - "8443:8443"
+    networks:
+      - mongoCluster
+
+networks:
+  mongoCluster:
+    driver: bridge
+
+volumes:
+  mongoMainVol:
