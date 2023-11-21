@@ -101,12 +101,24 @@ class ObjectDetectionBot(Bot):
             return False
         return True
 
+    def formatted_message(self,json_ob):
+        obj_count = {}
+        formatted_string = f"Detected Objects:\n"
+        for label in json_ob["labels"]:
+            class_name = label["class"]
+            if class_name in obj_count:
+                obj_count[class_name] += 1
+            else:
+                obj_count[class_name] = 1
+        for key, value in obj_count.items():
+            formatted_string += f"{key}: {value}\n"
+        return formatted_string
     def get_prediction(self, img_url):
         # Assuming your YOLOv5 service has an endpoint to accept image URL for prediction
         try:
             logger.info(img_url)
             logger.info(type(img_url))
-            response = requests.post(f"http://127.0.0.1:8081/predict?imgName={img_url}")
+            response = requests.post(f"http://my-yolo-bot:8081/predict?imgName={img_url}")
             if response.status_code == 200:
                 return response.json()
             else:
@@ -135,7 +147,7 @@ class ObjectDetectionBot(Bot):
             logger.info(s3_path)
             # TODO send results to the Telegram end-user
             if prediction:
-                formatted_response = prediction
+                formatted_response = self.formatted_message(prediction)
                 self.send_text(msg['chat']['id'], formatted_response)
             else:
                 self.send_text(msg['chat']['id'], "Failed to get prediction from YOLOv5 service.")
