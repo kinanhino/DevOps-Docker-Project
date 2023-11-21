@@ -10,17 +10,40 @@ services:
       - "27017:27017"
     networks:
       - mongoCluster
-  yolo5bot:
-    image: kinanhino/yolobot:1.0.0
+
+  mongoDocRep1:
+    image: mongo:5
+    command: mongod --replSet myReplicaSet --bind_ip localhost,mongoDocRep1
     volumes:
+      - mongoSec1Vol:/data/db
     ports:
-      - "8081:8081"
+      - "27018:27017"
     networks:
       - mongoCluster
+
+  mongoDocRep2:
+    image: mongo:5
+    command: mongod --replSet myReplicaSet --bind_ip localhost,mongoDocRep2
+    volumes:
+      - mongoSec2Vol:/data/db
+    ports:
+      - "27019:27017"
+    networks:
+      - mongoCluster
+
   polybot:
-    image: kinanhino/polybot:1.0.0
+    image: kinanhino/polybot:1.0.1
+    env_file: .env_poly
     ports:
       - "8443:8443"
+    networks:
+      - mongoCluster
+
+  yolo:
+    image: kinanhino/yolobot:1.0.0
+    env_file: .env_yolo
+    ports:
+      - "8081:8081"
     networks:
       - mongoCluster
 
@@ -30,3 +53,5 @@ networks:
 
 volumes:
   mongoMainVol:
+  mongoSec1Vol:
+  mongoSec2Vol:

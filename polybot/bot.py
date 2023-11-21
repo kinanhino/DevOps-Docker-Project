@@ -118,7 +118,7 @@ class ObjectDetectionBot(Bot):
         try:
             logger.info(img_url)
             logger.info(type(img_url))
-            response = requests.post(f"http://my-yolo-bot:8081/predict?imgName={img_url}")
+            response = requests.post(f"http://devops-docker-project-yolo-1:8081/predict?imgName={img_url}")
             if response.status_code == 200:
                 return response.json()
             else:
