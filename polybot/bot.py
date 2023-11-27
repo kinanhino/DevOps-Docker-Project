@@ -152,8 +152,7 @@ class ObjectDetectionBot(Bot):
                 # TODO send a request to the `yolo5` service for prediction
                 prediction = self.get_prediction(s3_path)
                 self.delete_message(msg['chat']['id'], loading_msg.message_id)
-                # TODO sen
-                #  d results to the Telegram end-user
+                # TODO send results to the Telegram end-user
                 if prediction:
                     formatted_response = self.formatted_message(prediction)
                     self.send_text(msg['chat']['id'], text=formatted_response)
