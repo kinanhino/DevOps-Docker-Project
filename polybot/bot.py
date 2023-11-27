@@ -154,8 +154,11 @@ class ObjectDetectionBot(Bot):
                 self.delete_message(msg['chat']['id'], loading_msg.message_id)
                 # TODO send results to the Telegram end-user
                 if prediction:
+                    # send the prediction summary
                     formatted_response = self.formatted_message(prediction)
                     self.send_text(msg['chat']['id'], text=formatted_response)
+
+                    # send the prediction image
                     s3_path = "predicted/" + os.path.basename(photo_path)
                     self.download_from_s3(s3_bucket, s3_path, photo_path)
                     self.send_photo(msg['chat']['id'], photo_path)
