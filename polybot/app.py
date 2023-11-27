@@ -1,7 +1,7 @@
 import flask
 from flask import request
 import os
-from bot import ObjectDetectionBot, Bot
+from bot import ObjectDetectionBot
 
 app = flask.Flask(__name__)
 

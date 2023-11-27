@@ -26,6 +26,12 @@ class Bot:
     def send_text(self, chat_id, text):
         self.telegram_bot_client.send_message(chat_id, text)
 
+    def send_animation(self, chat_id, gif):
+        return self.telegram_bot_client.send_animation(chat_id=chat_id, animation=gif)
+
+    def delete_message(self, chat_id, msg_id):
+        self.telegram_bot_client.delete_message(chat_id=chat_id, message_id=msg_id)
+
     def send_text_with_quote(self, chat_id, text, quoted_msg_id):
         self.telegram_bot_client.send_message(chat_id, text, reply_to_message_id=quoted_msg_id)
 
@@ -43,7 +49,6 @@ class Bot:
         file_info = self.telegram_bot_client.get_file(msg['photo'][-1]['file_id'])
         data = self.telegram_bot_client.download_file(file_info.file_path)
         folder_name = file_info.file_path.split('/')[0]
-        logger.info(f'folder_name: {folder_name}')
         if not os.path.exists(folder_name):
             os.makedirs(folder_name)
 
@@ -82,19 +87,21 @@ class ObjectDetectionBot(Bot):
     region = os.getenv('REGION')
     session = boto3.Session(aws_access_key_id=aws_key_id, aws_secret_access_key=aws_access_key, region_name=region)
 
+    def download_from_s3(self, bucket_name, object_name, local_path):
+
+        s3_client = self.session.client('s3')
+        try:
+            s3_client.download_file(bucket_name, object_name, local_path)
+        except ClientError as e:
+            logger.error(e)
+            return False
+        return True
+
     def upload_to_s3(self, file_path, bucket_name, object_name=None):
         if object_name is None:
             object_name = os.path.basename(file_path)
         s3_client = self.session.client('s3')
-        logger.info(s3_client.list_objects(
-            Bucket='kin-docker-bucket'))
         try:
-            logger.info(file_path)
-            logger.info(type(file_path))
-            logger.info(object_name)
-            logger.info(type(object_name))
-            logger.info(bucket_name)
-            logger.info(type(bucket_name))
             s3_client.upload_file(file_path, bucket_name, object_name)
         except ClientError as e:
             logger.error(e)
@@ -113,11 +120,9 @@ class ObjectDetectionBot(Bot):
         for key, value in obj_count.items():
             formatted_string += f"{key}: {value}\n"
         return formatted_string
+
     def get_prediction(self, img_url):
-        # Assuming your YOLOv5 service has an endpoint to accept image URL for prediction
         try:
-            logger.info(img_url)
-            logger.info(type(img_url))
             response = requests.post(f"http://devops-docker-project-yolo-1:8081/predict?imgName={img_url}")
             if response.status_code == 200:
                 return response.json()
@@ -131,26 +136,32 @@ class ObjectDetectionBot(Bot):
         logger.info(f'Incoming message: {msg}')
 
         if self.is_current_msg_photo(msg):
+            with open('loading.gif', 'rb') as gif:
+                loading_msg = self.send_animation(chat_id=msg['chat']['id'], gif=gif)
             # TODO download the user photo (utilize download_user_photo)
             photo_path = self.download_user_photo(msg)
-
             # TODO upload the photo to S3
             s3_bucket = os.getenv('BUCKET_NAME')
 
             s3_path = "photos/" + os.path.basename(photo_path)
             uploaded = self.upload_to_s3(photo_path, s3_bucket, s3_path)
             if not uploaded:
+                self.delete_message(msg['chat']['id'], loading_msg.message_id)
                 self.send_text(msg['chat']['id'], "Failed to upload image to S3.")
-            # TODO send a request to the `yolo5` service for prediction
-            prediction = self.get_prediction(s3_path)
-            logger.info('s3_path')
-            logger.info(s3_path)
-            # TODO send results to the Telegram end-user
-            if prediction:
-                formatted_response = self.formatted_message(prediction)
-                self.send_text(msg['chat']['id'], formatted_response)
             else:
-                self.send_text(msg['chat']['id'], "Failed to get prediction from YOLOv5 service.")
+                # TODO send a request to the `yolo5` service for prediction
+                prediction = self.get_prediction(s3_path)
+                self.delete_message(msg['chat']['id'], loading_msg.message_id)
+                # TODO sen
+                #  d results to the Telegram end-user
+                if prediction:
+                    formatted_response = self.formatted_message(prediction)
+                    self.send_text(msg['chat']['id'], text=formatted_response)
+                    s3_path = "predicted/" + os.path.basename(photo_path)
+                    self.download_from_s3(s3_bucket, s3_path, photo_path)
+                    self.send_photo(msg['chat']['id'], photo_path)
+                else:
+                    self.send_text(msg['chat']['id'], "Failed to get prediction from YOLOv5 service.")
         elif "text" in msg:
             self.send_text(msg['chat']['id'], f'Your original message: {msg["text"]}')
         else:

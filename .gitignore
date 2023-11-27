@@ -5,3 +5,4 @@ venv/*
 .env*
 __pycache__/
 polybot/__pycache__/
+yolo5/__pycache__/

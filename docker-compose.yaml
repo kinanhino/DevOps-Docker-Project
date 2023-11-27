@@ -32,7 +32,8 @@ services:
       - mongoCluster
 
   polybot:
-    image: kinanhino/polybot:1.0.1
+    # image: kinanhino/polybot:1.0.1
+    build: ./polybot
     env_file: .env_poly
     ports:
       - "8443:8443"

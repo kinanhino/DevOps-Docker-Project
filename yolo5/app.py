@@ -1,4 +1,3 @@
-import logging
 import time
 from pathlib import Path, PosixPath
 
@@ -8,7 +7,7 @@ from detect import run
 import uuid
 import yaml
 from loguru import logger
-from dotenv import load_dotenv, find_dotenv
+from dotenv import load_dotenv
 import os
 import boto3
 from pymongo import MongoClient
@@ -22,9 +21,6 @@ class JSONEncoder(json.JSONEncoder):
         elif isinstance(o, PosixPath):
             return str(o)
         return json.JSONEncoder.default(self, o)
-
-#env_path = os.path.join(os.path.dirname(__file__), '..', '.env')
-#load_dotenv(find_dotenv())#dotenv_path=env_path
 
 aws_key_id = os.getenv('AWS_KEY_ID')
 aws_access_key = os.getenv('AWS_ACCESS_KEY')
@@ -57,15 +53,11 @@ def predict():
     # TODO download img_name from S3, store the local image path in original_img_path
     #  The bucket name should be provided as an env var BUCKET_NAME.
     s3 = session.client('s3')
-    #os.makedirs('../Images', exist_ok=True)
-    logger.info(f"{img_name}: image name before change")
     original_img_path = img_name
     if "photos" in img_name:
         os.makedirs("photos", exist_ok=True)
         img_name = img_name.split('/')[-1]
     try:
-        logger.info(f"Downloading {img_name} from {images_bucket} to {original_img_path}")
-
         s3.download_file(images_bucket, original_img_path, original_img_path)
         logger.info(f'prediction: {prediction_id}/{original_img_path}. Download img completed')
     except Exception as e:
@@ -89,7 +81,6 @@ def predict():
 
     # TODO Uploads the predicted image (predicted_img_path) to S3 (be careful not to override the original image).
     upload_file_to_s3(str(predicted_img_path), images_bucket, f"predicted/{img_name}")
-    logger.info(f"here: {str(predicted_img_path)}")
     # Parse prediction labels and create a summary
     pred_summary_path = Path(f'static/data/{prediction_id}/labels/{img_name.split(".")[0]}.txt')
     if pred_summary_path.exists():
@@ -113,11 +104,6 @@ def predict():
             'labels': labels,
             'time': time.time()
         }
-        logger.info("summaarrrrrrrrrrrrrrrrrryyyy................")
-        logger.info(type(prediction_summary))
-        for key,value in prediction_summary.items():
-            logger.info(f"{key},{type(value)}")
-        # logger.info(prediction_summary)
         # TODO store the prediction_summary in MongoDB
         save_to_db(prediction_summary)
         prediction_summary["_id"] = str(prediction_summary["_id"])
@@ -134,7 +120,7 @@ def upload_file_to_s3(file_name, bucket, object_name=None):
     try:
         s3_client.upload_file(file_name, bucket, object_name)
     except ClientError as e:
-        logging.error(e)
+        logger.error(e)
         return False
     return True
 
@@ -149,6 +135,7 @@ def save_to_db(data):
     except Exception as e:
         logger.error(f"Error saving data: {e}")
         return False
+
 
 if __name__ == "__main__":
     app.run(host='0.0.0.0', port=8081)
